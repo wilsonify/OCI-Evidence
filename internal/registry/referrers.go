@@ -36,3 +36,12 @@ func (s *InMemoryReferrers) Discover(_ context.Context, subjectDigest string) ([
 	copy(out, items)
 	return out, nil
 }
+
+type OCIReferrers struct{}
+
+func NewOCIReferrers() *OCIReferrers { return &OCIReferrers{} }
+
+func (s *OCIReferrers) Attach(_ context.Context, _ string, _ model.Evidence) error { return nil }
+func (s *OCIReferrers) Discover(_ context.Context, _ string) ([]model.Evidence, error) {
+	return nil, nil
+}

@@ -3,11 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/wilsonify/OCI-Evidence/adapters/cosign"
+	"github.com/wilsonify/OCI-Evidence/adapters/grype"
+	"github.com/wilsonify/OCI-Evidence/adapters/provenance"
 	"github.com/wilsonify/OCI-Evidence/adapters/syft"
 	"github.com/wilsonify/OCI-Evidence/internal/artifact"
 	"github.com/wilsonify/OCI-Evidence/internal/cache"
@@ -17,6 +22,7 @@ import (
 	"github.com/wilsonify/OCI-Evidence/internal/trust"
 	"github.com/wilsonify/OCI-Evidence/internal/workers"
 	"github.com/wilsonify/OCI-Evidence/pkg/api"
+	"github.com/wilsonify/OCI-Evidence/pkg/model"
 )
 
 func main() {
@@ -26,62 +32,82 @@ func main() {
 	}
 	cmd := os.Args[1]
 	reference := os.Args[2]
-	jsonOut := hasFlag("--json")
+
+	fs := flag.NewFlagSet("ocisec", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	jsonOut := fs.Bool("json", false, "print machine-readable JSON")
+	policyPath := fs.String("policy", "", "load policy from JSON file")
+	registryPath := fs.String("registry", "", "write output to file")
+	if err := fs.Parse(os.Args[3:]); err != nil {
+		usage()
+		os.Exit(2)
+	}
 
 	svc := controller.Service{
-		Inspector: artifact.DigestOnlyInspector{},
+		Inspector: artifact.NewRegistryInspector(),
 		Workers: workers.NewRegistry(
-			syft.NewStatic(),
+			syft.New(),
+			grype.New(),
+			cosign.New(),
+			provenance.New(),
 		),
-		Trust: trust.WorkerTrustPolicy{Allowed: map[string]struct{}{
-			"sha256:1111111111111111111111111111111111111111111111111111111111111111": {},
-		}},
-		Executor:   execution.LocalExecutor{Timeout: 5 * time.Second},
+		Trust:      trust.WorkerTrustPolicy{Allowed: map[string]struct{}{}},
+		Executor:   execution.LocalExecutor{Timeout: 30 * time.Second},
 		Cache:      cache.New(),
 		Referrers:  registry.NewInMemoryReferrers(),
 		ConfigHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
 	}
 
 	ctx := context.Background()
-	policy := api.Policy{RequireSignature: true, RequireProvenance: false, FailOnStale: true, MaxCriticalVulns: 0, WarnOnUnsupported: true}
-
-	switch cmd {
-	case "inspect":
-		v, err := svc.Inspect(ctx, reference)
-		out(ctx, jsonOut, v, err)
-	case "discover", "evidence":
-		v, err := svc.Discover(ctx, reference)
-		out(ctx, jsonOut, v, err)
-	case "scan":
-		e, reused, err := svc.Scan(ctx, reference)
+	policyDef := api.Policy{RequireSignature: true, RequireProvenance: false, FailOnStale: true, MaxCriticalVulns: 0, MaxHighVulns: 0, WarnOnUnsupported: true}
+	if *policyPath != "" {
+		var err error
+		policyDef, err = api.LoadPolicy(*policyPath)
 		if err != nil {
 			exitErr(err)
 		}
-		out(ctx, jsonOut, map[string]any{"reused": reused, "evidence": e}, nil)
+	}
+
+	var value any
+	var err error
+	switch cmd {
+	case "inspect":
+		value, err = svc.Inspect(ctx, reference)
+	case "discover", "evidence":
+		value, err = svc.Discover(ctx, reference)
+	case "scan":
+		e, reused, scanErr := svc.Scan(ctx, reference)
+		if scanErr != nil {
+			exitErr(scanErr)
+		}
+		value = map[string]any{"reused": reused, "evidence": e}
 	case "verify":
-		v, err := svc.Verify(ctx, reference, policy)
-		out(ctx, jsonOut, v, err)
+		v, verifyErr := svc.Verify(ctx, reference, policyDef)
+		value = v
+		err = verifyErr
 	case "policy":
-		v, err := svc.Evaluate(ctx, reference, policy)
-		out(ctx, jsonOut, v, err)
+		v, policyErr := svc.Evaluate(ctx, reference, policyDef)
+		value = v
+		err = policyErr
 	default:
 		usage()
 		os.Exit(2)
 	}
-}
-
-func hasFlag(flag string) bool {
-	for _, a := range os.Args[3:] {
-		if a == flag {
-			return true
-		}
+	out(*jsonOut, *registryPath, value, err)
+	if err == nil {
+		os.Exit(exitCodeForValue(value))
 	}
-	return false
+	os.Exit(1)
 }
 
-func out(_ context.Context, jsonOut bool, value any, err error) {
+func out(jsonOut bool, registryPath string, value any, err error) {
 	if err != nil {
 		exitErr(err)
+	}
+	if registryPath != "" {
+		if err := writeOutput(registryPath, value); err != nil {
+			exitErr(err)
+		}
 	}
 	if jsonOut {
 		enc := json.NewEncoder(os.Stdout)
@@ -98,6 +124,9 @@ func renderHuman(value any) string {
 }
 
 func exitErr(err error) {
+	if err == nil {
+		os.Exit(0)
+	}
 	_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 	if strings.Contains(err.Error(), "digest") {
 		_, _ = fmt.Fprintln(os.Stderr, "hint: use repository@sha256:<64hex>")
@@ -105,6 +134,53 @@ func exitErr(err error) {
 	os.Exit(1)
 }
 
+func writeOutput(path string, value any) error {
+	b, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o600)
+}
+
+func exitCodeForValue(value any) int {
+	switch v := value.(type) {
+	case model.VerifyResult:
+		if v.Decision.State == model.StatePass {
+			return 0
+		}
+		return 1
+	case model.Decision:
+		if v.State == model.StatePass {
+			return 0
+		}
+		return 1
+	case map[string]any:
+		if decision, ok := v["decision"].(model.Decision); ok {
+			if decision.State == model.StatePass {
+				return 0
+			}
+			return 1
+		}
+		if evidence, ok := v["evidence"].([]model.Evidence); ok {
+			for _, e := range evidence {
+				if e.State == model.StateFail || e.State == model.StateError || e.State == model.StateRevoked || e.State == model.StateStale {
+					return 1
+				}
+			}
+		}
+		return 0
+	case []model.Evidence:
+		for _, e := range v {
+			if e.State == model.StateFail || e.State == model.StateError || e.State == model.StateRevoked || e.State == model.StateStale {
+				return 1
+			}
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
 func usage() {
-	fmt.Println("usage: ocisec <inspect|discover|scan|verify|policy|evidence> <repository@sha256:digest> [--json]")
+	fmt.Println("usage: ocisec <inspect|discover|scan|verify|policy|evidence> <repository@sha256:digest> [--json] [--policy <file>] [--registry <file>]")
 }

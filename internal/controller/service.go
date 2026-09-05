@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/wilsonify/OCI-Evidence/internal/artifact"
@@ -37,7 +38,21 @@ func (s Service) Discover(ctx context.Context, reference string) ([]model.Eviden
 	if err != nil {
 		return nil, err
 	}
-	return s.Referrers.Discover(ctx, a.Digest)
+	evs, err := s.Referrers.Discover(ctx, a.Digest)
+	if err != nil {
+		return nil, err
+	}
+	for i := range evs {
+		if err := s.Trust.Verify(evs[i].Worker.Digest); err != nil {
+			evs[i].Revoked = true
+			evs[i].State = model.StateRevoked
+			evs[i].Result = map[string]any{"error": err.Error()}
+		}
+		if s.Cache != nil && evs[i].ProducedAt.IsZero() == false && time.Since(evs[i].ProducedAt) > s.Cache.MaxAge {
+			evs[i].Stale = true
+		}
+	}
+	return evs, nil
 }
 
 func (s Service) Scan(ctx context.Context, reference string, requested ...string) ([]model.Evidence, bool, error) {
@@ -83,10 +98,19 @@ func (s Service) Scan(ctx context.Context, reference string, requested ...string
 		}
 
 		scanKey := evidence.ScanKey(a.Digest, id.Digest, s.ConfigHash, "", cap)
-		if cached, ok := s.Cache.Get(scanKey); ok && !cached.Revoked && !cached.Stale {
-			reusedAny = true
-			evidences = append(evidences, cached)
-			continue
+		if s.Cache != nil {
+			if cached, ok := s.Cache.Get(scanKey); ok {
+				if err := s.Trust.Verify(cached.Worker.Digest); err != nil {
+					cached.Revoked = true
+					cached.State = model.StateRevoked
+					cached.Result = map[string]any{"error": err.Error()}
+					s.Cache.Put(cached)
+				} else if !cached.Revoked && !cached.Stale {
+					reusedAny = true
+					evidences = append(evidences, cached)
+					continue
+				}
+			}
 		}
 
 		res, execErr := s.Executor.Execute(ctx, w, a, workers.Request{Capability: cap, ConfigurationDigest: s.ConfigHash})
@@ -108,9 +132,13 @@ func (s Service) Scan(ctx context.Context, reference string, requested ...string
 			Result:              payload,
 			ProducedAt:          time.Now().UTC(),
 		}
-		s.Cache.Put(ev)
-		if err := s.Referrers.Attach(ctx, a.Digest, ev); err != nil {
-			return nil, reusedAny, err
+		if s.Cache != nil {
+			s.Cache.Put(ev)
+		}
+		if s.Referrers != nil {
+			if err := s.Referrers.Attach(ctx, a.Digest, ev); err != nil {
+				log.Printf("warning: attaching evidence for %s/%s: %v", a.Repository, a.Digest, err)
+			}
 		}
 		evidences = append(evidences, ev)
 	}

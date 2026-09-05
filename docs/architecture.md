@@ -4,15 +4,15 @@ OCI-Evidence is a small control plane that uses immutable digest identity and un
 
 ## Vertical slice
 
-1. Inspect OCI artifact by digest identity.
-2. Classify artifact capabilities.
-3. Verify worker trust policy by worker digest.
-4. Execute worker through isolated executor abstraction.
+1. Inspect OCI artifact by digest identity using a registry-backed manifest resolver.
+2. Classify artifact capabilities from registry metadata and media types.
+3. Verify worker trust policy by worker digest and revoke untrusted cached evidence.
+4. Execute worker through isolated executor abstraction with CLI-backed adapters.
 5. Normalize worker output into versioned evidence schema.
 6. Compute deterministic scan key from immutable inputs.
-7. Reuse cached evidence if scan key matches.
+7. Reuse cached evidence if scan key matches and the item is not stale or revoked.
 8. Attach evidence as referrer-linked records.
-9. Evaluate policy from normalized evidence.
+9. Evaluate policy from normalized evidence, including critical/high thresholds and file-based policy controls.
 
 ## Trust boundaries
 

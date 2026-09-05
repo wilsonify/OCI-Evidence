@@ -8,15 +8,16 @@ It verifies artifacts by immutable digest, executes untrusted workers through a 
 
 ## Vertical slice implemented
 
-- inspect artifact (`repository@sha256:digest`)
-- classify capabilities
-- verify worker digest trust policy
-- execute worker via isolation abstraction
+- inspect artifact (`repository@sha256:digest`) with registry-backed manifest resolution
+- classify capabilities based on manifest metadata
+- verify worker digest trust policy and revoke stale or untrusted evidence
+- execute worker via isolation abstraction with CLI-backed adapters
 - normalize evidence (`ocisec.evidence.v1`)
 - compute deterministic scan key
-- cache and reuse matching evidence
+- cache and reuse matching evidence with TTL/staleness checks
 - attach/discover evidence through referrer-store abstraction
-- evaluate policy independently from scan execution
+- evaluate policy independently from scan execution, including critical/high thresholds
+- load policy files and write JSON output to a registry file via CLI flags
 
 ## Security invariants
 
@@ -38,7 +39,7 @@ ocisec policy <repository@sha256:digest>
 ocisec evidence <repository@sha256:digest>
 ```
 
-Use `--json` for machine-readable output.
+Use `--json` for machine-readable output, `--policy <file>` to load a policy JSON document, and `--registry <file>` to write the result payload to a file.
 
 ## Library usage
 

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 
 	"github.com/wilsonify/OCI-Evidence/pkg/model"
 )
@@ -19,5 +21,21 @@ type Policy struct {
 	RequireProvenance bool `json:"requireProvenance"`
 	FailOnStale       bool `json:"failOnStale"`
 	MaxCriticalVulns  int  `json:"maxCriticalVulns"`
+	MaxHighVulns      int  `json:"maxHighVulns"`
 	WarnOnUnsupported bool `json:"warnOnUnsupported"`
+}
+
+func LoadPolicy(path string) (Policy, error) {
+	if path == "" {
+		return Policy{}, nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Policy{}, err
+	}
+	var p Policy
+	if err := json.Unmarshal(b, &p); err != nil {
+		return Policy{}, err
+	}
+	return p, nil
 }

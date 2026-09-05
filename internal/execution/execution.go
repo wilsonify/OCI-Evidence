@@ -25,3 +25,11 @@ func (e LocalExecutor) Execute(ctx context.Context, worker workers.Worker, subje
 	defer cancel()
 	return worker.Scan(c, subject, req)
 }
+
+type SandboxExecutor struct {
+	LocalExecutor
+}
+
+func (e SandboxExecutor) Execute(ctx context.Context, worker workers.Worker, subject model.Artifact, req workers.Request) (workers.Result, error) {
+	return e.LocalExecutor.Execute(ctx, worker, subject, req)
+}
