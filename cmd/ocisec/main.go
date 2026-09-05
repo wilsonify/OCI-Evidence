@@ -47,9 +47,11 @@ func main() {
 
 	switch cmd {
 	case "inspect":
-		out(ctx, jsonOut, svc.Inspect(ctx, reference))
+		v, err := svc.Inspect(ctx, reference)
+		out(ctx, jsonOut, v, err)
 	case "discover", "evidence":
-		out(ctx, jsonOut, svc.Discover(ctx, reference))
+		v, err := svc.Discover(ctx, reference)
+		out(ctx, jsonOut, v, err)
 	case "scan":
 		e, reused, err := svc.Scan(ctx, reference)
 		if err != nil {
@@ -57,9 +59,11 @@ func main() {
 		}
 		out(ctx, jsonOut, map[string]any{"reused": reused, "evidence": e}, nil)
 	case "verify":
-		out(ctx, jsonOut, svc.Verify(ctx, reference, policy))
+		v, err := svc.Verify(ctx, reference, policy)
+		out(ctx, jsonOut, v, err)
 	case "policy":
-		out(ctx, jsonOut, svc.Evaluate(ctx, reference, policy))
+		v, err := svc.Evaluate(ctx, reference, policy)
+		out(ctx, jsonOut, v, err)
 	default:
 		usage()
 		os.Exit(2)

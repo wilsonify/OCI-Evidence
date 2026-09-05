@@ -15,9 +15,9 @@ type Security interface {
 }
 
 type Policy struct {
-	RequireSignature   bool `json:"requireSignature"`
-	RequireProvenance  bool `json:"requireProvenance"`
-	FailOnStale        bool `json:"failOnStale"`
-	MaxCriticalVulns   int  `json:"maxCriticalVulns"`
-	WarnOnUnsupported  bool `json:"warnOnUnsupported"`
+	RequireSignature  bool `json:"requireSignature"`
+	RequireProvenance bool `json:"requireProvenance"`
+	FailOnStale       bool `json:"failOnStale"`
+	MaxCriticalVulns  int  `json:"maxCriticalVulns"`
+	WarnOnUnsupported bool `json:"warnOnUnsupported"`
 }

@@ -47,8 +47,8 @@ type VulnerabilitySummary struct {
 }
 
 type StaticWorker struct {
-	ID             model.WorkerIdentity
-	Supported      map[string]struct{}
+	ID              model.WorkerIdentity
+	Supported       map[string]struct{}
 	VulnerabilityDB model.DatabaseIdentity
 }
 

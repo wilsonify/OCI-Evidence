@@ -64,15 +64,15 @@ type Evidence struct {
 }
 
 type Decision struct {
-	State    State              `json:"state"`
-	Reasons  []string           `json:"reasons"`
-	Controls map[string]State   `json:"controls"`
+	State    State               `json:"state"`
+	Reasons  []string            `json:"reasons"`
+	Controls map[string]State    `json:"controls"`
 	Evidence map[string]Evidence `json:"evidence"`
 }
 
 type VerifyResult struct {
-	Artifact  Artifact  `json:"artifact"`
+	Artifact  Artifact   `json:"artifact"`
 	Evidence  []Evidence `json:"evidence"`
-	Decision  Decision  `json:"decision"`
-	ReusedAny bool      `json:"reusedAny"`
+	Decision  Decision   `json:"decision"`
+	ReusedAny bool       `json:"reusedAny"`
 }

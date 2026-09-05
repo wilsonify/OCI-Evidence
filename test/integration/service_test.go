@@ -20,7 +20,7 @@ import (
 func newService() controller.Service {
 	return controller.Service{
 		Inspector: artifact.DigestOnlyInspector{},
-		Workers: workers.NewRegistry(syft.NewStatic()),
+		Workers:   workers.NewRegistry(syft.NewStatic()),
 		Trust: trust.WorkerTrustPolicy{Allowed: map[string]struct{}{
 			"sha256:1111111111111111111111111111111111111111111111111111111111111111": {},
 		}},
