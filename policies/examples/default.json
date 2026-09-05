@@ -1,0 +1,7 @@
+{
+  "requireSignature": true,
+  "requireProvenance": false,
+  "failOnStale": true,
+  "maxCriticalVulns": 0,
+  "warnOnUnsupported": true
+}
