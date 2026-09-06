@@ -17,11 +17,11 @@ const (
 )
 
 type Descriptor struct {
-	Digest    string            `json:"digest"`
-	MediaType string            `json:"mediaType,omitempty"`
-	Size        int64             `json:"size,omitempty"`
-	ArtifactType string           `json:"artifactType,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Digest       string            `json:"digest"`
+	MediaType    string            `json:"mediaType,omitempty"`
+	Size         int64             `json:"size,omitempty"`
+	ArtifactType string            `json:"artifactType,omitempty"`
+	Annotations  map[string]string `json:"annotations,omitempty"`
 }
 
 type Artifact struct {

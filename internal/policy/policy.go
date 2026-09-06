@@ -91,37 +91,37 @@ func Evaluate(p api.Policy, evidences []model.Evidence, required []string) model
 		reasons = append(reasons, "all evaluated controls satisfy policy")
 	}
 
-	func shouldReplaceEvidence(next, current model.Evidence) bool {
-		if higherPriority(next.State, current.State) {
-			return true
-		}
-		if next.State != current.State {
-			return false
-		}
-		if next.ProducedAt.After(current.ProducedAt) {
-			return true
-		}
-		if current.ProducedAt.After(next.ProducedAt) {
-			return false
-		}
-		return next.ScanKey > current.ScanKey
-	}
-
-	func vulnerabilityCountsAcrossEvidence(evidences []model.Evidence) (int, int) {
-		critical := 0
-		high := 0
-		for _, ev := range evidences {
-			if ev.Capability != "vulnerability" || ev.State != model.StatePass {
-				continue
-			}
-			crit, hi := vulnerabilityCounts(ev)
-			critical += crit
-			high += hi
-		}
-		return critical, high
-	}
-
 	return model.Decision{State: state, Reasons: reasons, Controls: controls, Evidence: collected}
+}
+
+func shouldReplaceEvidence(next, current model.Evidence) bool {
+	if higherPriority(next.State, current.State) {
+		return true
+	}
+	if next.State != current.State {
+		return false
+	}
+	if next.ProducedAt.After(current.ProducedAt) {
+		return true
+	}
+	if current.ProducedAt.After(next.ProducedAt) {
+		return false
+	}
+	return next.ScanKey > current.ScanKey
+}
+
+func vulnerabilityCountsAcrossEvidence(evidences []model.Evidence) (int, int) {
+	critical := 0
+	high := 0
+	for _, ev := range evidences {
+		if ev.Capability != "vulnerability" || ev.State != model.StatePass {
+			continue
+		}
+		crit, hi := vulnerabilityCounts(ev)
+		critical += crit
+		high += hi
+	}
+	return critical, high
 }
 
 func higherPriority(newState, currentState model.State) bool {

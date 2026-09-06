@@ -176,6 +176,9 @@ func (s Service) validateEvidence(subject model.Artifact, ev model.Evidence) mod
 		ev.Result = map[string]any{"error": "evidence subject digest does not match artifact digest"}
 		return ev
 	}
+	if ev.Worker.Digest == "" || ev.State == model.StateUnsupported {
+		return ev
+	}
 	if err := s.Trust.Verify(ev.Worker.Digest); err != nil {
 		ev.Revoked = true
 		ev.State = model.StateRevoked
