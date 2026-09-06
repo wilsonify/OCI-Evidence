@@ -12,7 +12,7 @@ func (p WorkerTrustPolicy) Verify(digest string) error {
 		return fmt.Errorf("worker digest revoked: %s", digest)
 	}
 	if len(p.Allowed) == 0 {
-		return nil
+		return fmt.Errorf("worker digest not allowlisted: %s", digest)
 	}
 	if _, ok := p.Allowed[digest]; !ok {
 		return fmt.Errorf("worker digest not allowlisted: %s", digest)

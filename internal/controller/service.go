@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/wilsonify/OCI-Evidence/internal/artifact"
@@ -38,19 +37,15 @@ func (s Service) Discover(ctx context.Context, reference string) ([]model.Eviden
 	if err != nil {
 		return nil, err
 	}
+	if s.Referrers == nil {
+		return nil, errors.New("evidence referrer store is not configured")
+	}
 	evs, err := s.Referrers.Discover(ctx, a.Digest)
 	if err != nil {
 		return nil, err
 	}
 	for i := range evs {
-		if err := s.Trust.Verify(evs[i].Worker.Digest); err != nil {
-			evs[i].Revoked = true
-			evs[i].State = model.StateRevoked
-			evs[i].Result = map[string]any{"error": err.Error()}
-		}
-		if s.Cache != nil && evs[i].ProducedAt.IsZero() == false && time.Since(evs[i].ProducedAt) > s.Cache.MaxAge {
-			evs[i].Stale = true
-		}
+		evs[i] = s.validateEvidence(a, evs[i])
 	}
 	return evs, nil
 }
@@ -100,12 +95,9 @@ func (s Service) Scan(ctx context.Context, reference string, requested ...string
 		scanKey := evidence.ScanKey(a.Digest, id.Digest, s.ConfigHash, "", cap)
 		if s.Cache != nil {
 			if cached, ok := s.Cache.Get(scanKey); ok {
-				if err := s.Trust.Verify(cached.Worker.Digest); err != nil {
-					cached.Revoked = true
-					cached.State = model.StateRevoked
-					cached.Result = map[string]any{"error": err.Error()}
-					s.Cache.Put(cached)
-				} else if !cached.Revoked && !cached.Stale {
+				cached = s.validateEvidence(a, cached)
+				s.Cache.Put(cached)
+				if cached.State == model.StatePass {
 					reusedAny = true
 					evidences = append(evidences, cached)
 					continue
@@ -132,12 +124,13 @@ func (s Service) Scan(ctx context.Context, reference string, requested ...string
 			Result:              payload,
 			ProducedAt:          time.Now().UTC(),
 		}
+		ev = s.validateEvidence(a, ev)
 		if s.Cache != nil {
 			s.Cache.Put(ev)
 		}
 		if s.Referrers != nil {
 			if err := s.Referrers.Attach(ctx, a.Digest, ev); err != nil {
-				log.Printf("warning: attaching evidence for %s/%s: %v", a.Repository, a.Digest, err)
+				return evidences, reusedAny, err
 			}
 		}
 		evidences = append(evidences, ev)
@@ -150,7 +143,7 @@ func (s Service) Evaluate(ctx context.Context, reference string, p api.Policy) (
 	if err != nil {
 		return model.Decision{}, err
 	}
-	evs, err := s.Referrers.Discover(ctx, a.Digest)
+	evs, err := s.Discover(ctx, reference)
 	if err != nil {
 		return model.Decision{}, err
 	}
@@ -170,8 +163,32 @@ func (s Service) Verify(ctx context.Context, reference string, p api.Policy) (mo
 	if err != nil {
 		return model.VerifyResult{}, err
 	}
+	for i := range evs {
+		evs[i] = s.validateEvidence(a, evs[i])
+	}
 	decision := policy.Evaluate(p, evs, classifier.Capabilities(a))
 	return model.VerifyResult{Artifact: a, Evidence: evs, Decision: decision, ReusedAny: reused}, nil
+}
+
+func (s Service) validateEvidence(subject model.Artifact, ev model.Evidence) model.Evidence {
+	if ev.Subject.Digest != "" && ev.Subject.Digest != subject.Digest {
+		ev.State = model.StateError
+		ev.Result = map[string]any{"error": "evidence subject digest does not match artifact digest"}
+		return ev
+	}
+	if err := s.Trust.Verify(ev.Worker.Digest); err != nil {
+		ev.Revoked = true
+		ev.State = model.StateRevoked
+		ev.Result = map[string]any{"error": err.Error()}
+		return ev
+	}
+	if s.Cache != nil && ev.ProducedAt.IsZero() == false && time.Since(ev.ProducedAt) > s.Cache.MaxAge {
+		ev.Stale = true
+		if ev.State == model.StatePass {
+			ev.State = model.StateStale
+		}
+	}
+	return ev
 }
 
 var _ api.Security = Service{}

@@ -1,6 +1,7 @@
 package classifier
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/wilsonify/OCI-Evidence/pkg/model"
@@ -35,5 +36,6 @@ func Capabilities(a model.Artifact) []string {
 	for k := range known {
 		out = append(out, k)
 	}
+	sort.Strings(out)
 	return out
 }

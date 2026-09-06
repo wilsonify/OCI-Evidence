@@ -10,6 +10,8 @@ import (
 type EvidenceCache struct {
 	mu         sync.RWMutex
 	byK        map[string]model.Evidence
+	order      []string
+	position   map[string]int
 	MaxAge     time.Duration
 	MaxEntries int
 }
@@ -25,7 +27,13 @@ func NewWithOptions(maxAge time.Duration, maxEntries int) *EvidenceCache {
 	if maxEntries <= 0 {
 		maxEntries = 1024
 	}
-	return &EvidenceCache{byK: map[string]model.Evidence{}, MaxAge: maxAge, MaxEntries: maxEntries}
+	return &EvidenceCache{
+		byK:        map[string]model.Evidence{},
+		order:      []string{},
+		position:   map[string]int{},
+		MaxAge:     maxAge,
+		MaxEntries: maxEntries,
+	}
 }
 
 func (c *EvidenceCache) Get(scanKey string) (model.Evidence, bool) {
@@ -47,13 +55,24 @@ func (c *EvidenceCache) Put(e model.Evidence) {
 	if c.MaxAge > 0 && !e.ProducedAt.IsZero() && time.Since(e.ProducedAt) > c.MaxAge {
 		e.Stale = true
 	}
+	if _, exists := c.byK[e.ScanKey]; !exists {
+		c.position[e.ScanKey] = len(c.order)
+		c.order = append(c.order, e.ScanKey)
+	}
 	c.byK[e.ScanKey] = e
 	if c.MaxEntries > 0 && len(c.byK) > c.MaxEntries {
-		for k := range c.byK {
-			delete(c.byK, k)
-			if len(c.byK) <= c.MaxEntries {
-				break
-			}
+		for len(c.byK) > c.MaxEntries && len(c.order) > 0 {
+			key := c.order[0]
+			c.order = c.order[1:]
+			delete(c.position, key)
+			delete(c.byK, key)
 		}
+		c.reindexOrder()
+	}
+}
+
+func (c *EvidenceCache) reindexOrder() {
+	for i, key := range c.order {
+		c.position[key] = i
 	}
 }

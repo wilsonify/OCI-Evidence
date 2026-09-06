@@ -60,12 +60,12 @@ func (s StaticWorker) Supports(capability string) bool {
 }
 
 func (s StaticWorker) Scan(_ context.Context, _ model.Artifact, req Request) (Result, error) {
-	switch req.Capability {
-	case "vulnerability":
-		return Result{State: model.StatePass, Database: s.VulnerabilityDB, Payload: VulnerabilitySummary{}}, nil
-	case "signature", "provenance", "integrity", "sbom":
-		return Result{State: model.StatePass, Payload: map[string]any{"message": "validated"}}, nil
-	default:
-		return Result{State: model.StateUnsupported, Payload: map[string]any{"message": "unsupported"}}, nil
-	}
+	return Result{
+		State: model.StateError,
+		Payload: map[string]any{
+			"error":      "static worker is a placeholder and cannot produce trusted evidence",
+			"capability": req.Capability,
+		},
+		Database: s.VulnerabilityDB,
+	}, nil
 }

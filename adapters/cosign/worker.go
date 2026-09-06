@@ -33,11 +33,11 @@ func (w Worker) Scan(ctx context.Context, subject model.Artifact, req workers.Re
 	if req.Capability != "signature" {
 		return workers.Result{State: model.StateUnsupported, Payload: map[string]any{"message": "unsupported capability"}}, nil
 	}
-	out, err := exec.CommandContext(ctx, "cosign", "verify", subject.Digest, "--insecure-ignore-tlog=false").CombinedOutput()
+	out, err := exec.CommandContext(ctx, "cosign", "verify", subject.Reference, "--insecure-ignore-tlog=false").CombinedOutput()
 	if err != nil {
 		return workers.Result{}, err
 	}
-	var payload map[string]any
+	var payload any
 	if err := json.Unmarshal(out, &payload); err != nil {
 		payload = map[string]any{"raw": string(out)}
 	}

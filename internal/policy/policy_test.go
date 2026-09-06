@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -37,8 +38,12 @@ func TestEvaluateWarnsOnlyBeforeFail(t *testing.T) {
 	if decision.State != model.StateFail {
 		t.Fatalf("expected fail state, got %s", decision.State)
 	}
-	if len(decision.Reasons) != 1 {
-		t.Fatalf("expected only fail reasons, got %#v", decision.Reasons)
+	if len(decision.Reasons) == 0 {
+		t.Fatalf("expected fail reason, got %#v", decision.Reasons)
+	}
+	last := decision.Reasons[len(decision.Reasons)-1]
+	if !strings.Contains(last, "control signature is FAIL") {
+		t.Fatalf("expected deterministic fail reason ordering, got %#v", decision.Reasons)
 	}
 }
 
@@ -48,5 +53,20 @@ func TestEvaluateStaleAndSignatureRequirements(t *testing.T) {
 	decision := Evaluate(p, evs, []string{"signature"})
 	if decision.State != model.StateFail {
 		t.Fatalf("expected fail state for stale signature evidence; got %s", decision.State)
+	}
+
+	func TestEvaluateAggregatesMultipleVulnerabilityEvidenceRecords(t *testing.T) {
+		p := api.Policy{MaxCriticalVulns: 0, MaxHighVulns: 0}
+		evs := []model.Evidence{
+			{Capability: "vulnerability", State: model.StatePass, ScanKey: "a", Result: map[string]any{"critical": 0, "high": 1}},
+			{Capability: "vulnerability", State: model.StatePass, ScanKey: "b", Result: map[string]any{"critical": 1, "high": 0}},
+		}
+		decision := Evaluate(p, evs, []string{"vulnerability"})
+		if decision.State != model.StateFail {
+			t.Fatalf("expected fail state, got %s", decision.State)
+		}
+		if len(decision.Reasons) < 2 {
+			t.Fatalf("expected both vulnerability threshold failures, got %#v", decision.Reasons)
+		}
 	}
 }

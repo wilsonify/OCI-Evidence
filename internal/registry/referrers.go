@@ -2,10 +2,13 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/wilsonify/OCI-Evidence/pkg/model"
 )
+
+var ErrNotImplemented = errors.New("oci referrer storage not implemented")
 
 type EvidenceReferrerStore interface {
 	Attach(ctx context.Context, subjectDigest string, evidence model.Evidence) error
@@ -41,7 +44,9 @@ type OCIReferrers struct{}
 
 func NewOCIReferrers() *OCIReferrers { return &OCIReferrers{} }
 
-func (s *OCIReferrers) Attach(_ context.Context, _ string, _ model.Evidence) error { return nil }
+func (s *OCIReferrers) Attach(_ context.Context, _ string, _ model.Evidence) error {
+	return ErrNotImplemented
+}
 func (s *OCIReferrers) Discover(_ context.Context, _ string) ([]model.Evidence, error) {
-	return nil, nil
+	return nil, ErrNotImplemented
 }

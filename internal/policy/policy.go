@@ -3,6 +3,7 @@ package policy
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	"github.com/wilsonify/OCI-Evidence/pkg/api"
 	"github.com/wilsonify/OCI-Evidence/pkg/model"
@@ -15,7 +16,9 @@ func Evaluate(p api.Policy, evidences []model.Evidence, required []string) model
 		if s, ok := controls[e.Capability]; !ok || higherPriority(e.State, s) {
 			controls[e.Capability] = e.State
 		}
-		collected[e.Capability] = e
+		if prev, ok := collected[e.Capability]; !ok || shouldReplaceEvidence(e, prev) {
+			collected[e.Capability] = e
+		}
 	}
 	for _, c := range required {
 		if _, ok := controls[c]; !ok {
@@ -57,7 +60,13 @@ func Evaluate(p api.Policy, evidences []model.Evidence, required []string) model
 			setWorst(model.StateFail, "provenance verification is required")
 		}
 	}
-	for c, s := range controls {
+	controlNames := make([]string, 0, len(controls))
+	for c := range controls {
+		controlNames = append(controlNames, c)
+	}
+	sort.Strings(controlNames)
+	for _, c := range controlNames {
+		s := controls[c]
 		if s == model.StateFail || s == model.StateRevoked {
 			setWorst(model.StateFail, fmt.Sprintf("control %s is %s", c, s))
 		}
@@ -69,8 +78,7 @@ func Evaluate(p api.Policy, evidences []model.Evidence, required []string) model
 		}
 	}
 
-	if ev, ok := collected["vulnerability"]; ok {
-		crit, high := vulnerabilityCounts(ev)
+	if crit, high := vulnerabilityCountsAcrossEvidence(evidences); crit > 0 || high > 0 {
 		if p.MaxCriticalVulns >= 0 && crit > p.MaxCriticalVulns {
 			setWorst(model.StateFail, fmt.Sprintf("vulnerability critical count %d exceeds max %d", crit, p.MaxCriticalVulns))
 		}
@@ -81,6 +89,36 @@ func Evaluate(p api.Policy, evidences []model.Evidence, required []string) model
 
 	if len(reasons) == 0 {
 		reasons = append(reasons, "all evaluated controls satisfy policy")
+	}
+
+	func shouldReplaceEvidence(next, current model.Evidence) bool {
+		if higherPriority(next.State, current.State) {
+			return true
+		}
+		if next.State != current.State {
+			return false
+		}
+		if next.ProducedAt.After(current.ProducedAt) {
+			return true
+		}
+		if current.ProducedAt.After(next.ProducedAt) {
+			return false
+		}
+		return next.ScanKey > current.ScanKey
+	}
+
+	func vulnerabilityCountsAcrossEvidence(evidences []model.Evidence) (int, int) {
+		critical := 0
+		high := 0
+		for _, ev := range evidences {
+			if ev.Capability != "vulnerability" || ev.State != model.StatePass {
+				continue
+			}
+			crit, hi := vulnerabilityCounts(ev)
+			critical += crit
+			high += hi
+		}
+		return critical, high
 	}
 
 	return model.Decision{State: state, Reasons: reasons, Controls: controls, Evidence: collected}

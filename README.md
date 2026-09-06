@@ -59,7 +59,7 @@ Core API methods:
 cmd/ocisec
 internal/{artifact,classifier,evidence,policy,trust,workers,execution,registry,cache,controller}
 pkg/{api,model}
-adapters/{syft,grype,trivy,cosign}
+adapters/{syft,grype,cosign,provenance}
 policies/examples
 docs/
 test/{integration,fuzz}

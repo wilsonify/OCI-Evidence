@@ -51,7 +51,7 @@ func main() {
 			cosign.New(),
 			provenance.New(),
 		),
-		Trust:      trust.WorkerTrustPolicy{Allowed: map[string]struct{}{}},
+		Trust:      trust.WorkerTrustPolicy{Allowed: allowedWorkersFromEnv()},
 		Executor:   execution.LocalExecutor{Timeout: 30 * time.Second},
 		Cache:      cache.New(),
 		Referrers:  registry.NewInMemoryReferrers(),
@@ -93,29 +93,29 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	out(*jsonOut, *registryPath, value, err)
-	if err == nil {
-		os.Exit(exitCodeForValue(value))
-	}
-	os.Exit(1)
-}
-
-func out(jsonOut bool, registryPath string, value any, err error) {
 	if err != nil {
 		exitErr(err)
 	}
+	if err := out(*jsonOut, *registryPath, value); err != nil {
+		exitErr(err)
+	}
+	os.Exit(exitCodeForValue(value))
+}
+
+func out(jsonOut bool, registryPath string, value any) error {
 	if registryPath != "" {
 		if err := writeOutput(registryPath, value); err != nil {
-			exitErr(err)
+			return err
 		}
 	}
 	if jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(value)
-		return
+		return nil
 	}
 	fmt.Println(renderHuman(value))
+	return nil
 }
 
 func renderHuman(value any) string {
@@ -183,4 +183,20 @@ func exitCodeForValue(value any) int {
 
 func usage() {
 	fmt.Println("usage: ocisec <inspect|discover|scan|verify|policy|evidence> <repository@sha256:digest> [--json] [--policy <file>] [--registry <file>]")
+}
+
+func allowedWorkersFromEnv() map[string]struct{} {
+	raw := strings.TrimSpace(os.Getenv("OCIEVIDENCE_ALLOWED_WORKERS"))
+	allowed := map[string]struct{}{}
+	if raw == "" {
+		return allowed
+	}
+	for _, item := range strings.Split(raw, ",") {
+		digest := strings.TrimSpace(item)
+		if digest == "" {
+			continue
+		}
+		allowed[digest] = struct{}{}
+	}
+	return allowed
 }
