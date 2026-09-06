@@ -43,7 +43,7 @@ Use `--json` for machine-readable output, `--policy <file>` to load a policy JSO
 
 ## Library usage
 
-Use `internal/controller.Service` through `pkg/api.Security` interface.
+Use the `pkg/api.Security` interface; the current reference implementation is `internal/controller.Service` (internal to this module for in-repo wiring only).
 
 Core API methods:
 
